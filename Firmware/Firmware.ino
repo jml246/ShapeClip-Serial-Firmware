@@ -145,6 +145,7 @@ int mode = 0; //0 = data for current device, 1 = subsequent data
  
 //JL - moved iStepAccumulator here to make it global to allow moveMotor() to save steps as steps were lost
 static unsigned int iStepAccumulator = 0;       // The step accumulator.
+
 /**
  * @brief Check to see if code should be called based on the timer.
  * This can be used to create a rudimentary timer.  It is called once per logic-loop.
@@ -297,29 +298,29 @@ void moveMotor() {
 	static boolean bAllowMotorShutdown = true;				// Is the motor allowed to shutdown.
 	static unsigned long shutdownTimeout = millis();		// The time of the last step.
 
-	// sample serial code F255,255,255,400X
-	// If we have a small change in position, add it to the accumulator.
+	// JL - sample serial code F255,255,255,400X
+	// JL - If we have a small change in position, add it to the accumulator.
 	//   so that we can batch it later.  If we do not do this, small steps
 	//   are often lost.
 	//   This also has the nice side effect as acting like a noise absorber.
                                       //while(abs(iMotorPosition) != iTargetPos){
 	int iAdjustedSteps = iTargetPos - iMotorPosition;
 
-	  // If the accumulated steps + the change this frame is over the minimum step, then step.
+	  // JL - If the accumulated steps + the change this frame is over the minimum step, then step.
 	  //int iAdjustedSteps = iStepAccumulator + iDelta;
 	// Do the check.
 	if (abs(iAdjustedSteps) >= STEP_ACCM_SIZE) 
 	{
     
-    // Compute the step direction.
+    // JL - Compute the step direction.
     int step = iAdjustedSteps >= 0 ? 1 : -1;
 
-    //Instruction to send e.g. F0,0,0,400X
+    //JL - Instruction to send e.g. F0,0,0,400X
     //step can be either -1 or 1 which determines direction
 		//This bit works fine
     /* WORKING CODE // */ 
     
-    // There was a small issue when making small steps in that it gets stuck -
+    // JL - There was a small issue when making small steps in that it gets stuck -
     // this is fixed as there was a bug in previous code with stepper acc
     // JL - Introduce new way of moving motor by getting hundreds, tens and units
     // and adjust speed accordingly to make a smoother transition and lower speeds when 
@@ -1166,19 +1167,29 @@ void setup() {
  * The function performs the following tasks:
  *   - 
  */
+int r = 0;
+int g = 0;
+int b = 0;
 void loop() {
   //JL notes 16/04/18
   // This loop section executes the motor and LED. It processes serial data and then prints out an F with all the remaining characters.
   //Once it passes the data, motor and LED updates occur as variables have been changed within the while loop.
-moveMotor();
-updateColour();
+  //There can be a latency in reaction due to the size of the shapeclip instruction as they are read in bytes; the greater the size, the longer the latency will be
+  //The shorter the size of the shapeclip instruction, the quicker data transfer will be. 
+//unsigned long lStartTime = millis(); // Time used to calculate delay in serial data transfer
+//unsigned long lCurrentTime = 0;
+//unsigned long lElapsedTime = 0;
+
+//updateColour(); // JL-function is commented out by WAS? 
  // if there's any serial available, read it:
   while (Serial.available() > 0) {
+//    lCurrentTime = millis();
+//    lElapsedTime += lCurrentTime - lStartTime;
     //Serial.print(mode);
       // Shut the motor down.
       // motor.shutdown();
 
-    if (mode==0) {
+    if (mode==0) {//0 = data for current device, 1 = subsequent data - default is 0
 
       // look for the next valid integer in the incoming serial stream:
       int red = Serial.parseInt();
@@ -1197,146 +1208,39 @@ updateColour();
         iInputMotorHeight = 0;
       if(iInputMotorHeight > MOTOR_TRAVEL)
         iInputMotorHeight = MOTOR_TRAVEL;
-      //Serial.println(iTargetPos);
-      //case 'Z': zeroMotor(); break; 
-
-      int r = constrain(red, 0, 255);
-      int g = constrain(green, 0, 255);
-      int b = constrain(blue, 0, 255);
+      r = constrain(red, 0, 255);
+      g = constrain(green, 0, 255);
+      b = constrain(blue, 0, 255);
       iTargetPos = constrain(iInputMotorHeight, 0, MOTOR_TRAVEL);
-            
-  pRGB.setPixelColor(0,  r, g, b);
-  pRGB.show();  
-
-      
-  
       // look for  end of your sentence:
       if (Serial.read() == 'X') {
-        //write out to leds and motor
-         
+        //write out to leds and motor        
         //Serial.print("entering mode 1");
         mode=1;
-   
       }
     }
     //pass on instructions to the next shapeclip
-    if (mode == 1) {
-      char val = Serial.read();
-      if (val == 'F'){
-        Serial.print(val);
+    if (mode == 1) 
+    {
+       char val = Serial.read();
+       if (val == 'F')
+       {
+         Serial.print(val);
          mode=0;
-      }
-      else     {
-        Serial.print(val);  
-      }  
+       }
+       else     
+       {
+          Serial.print(val);  
+       }  
     }
   }
+//delay(lElapsedTime);
 
 
-  
+pRGB.setPixelColor(0,  r, g, b);
+pRGB.show();  //JL- what changes first is the colour - motor comes second when it exits the loop and there is no more data available
+moveMotor();
 
-//	// Listen for a change in mode.
-//	detectAndSetModeChange( 0 );
-//
-//	// Attempt to read a serial bit from the screen.
-//	screenSerialRead();
-//	if( cmdBuffer[0] == 'M' && cmdBuffer[2] == 'X' )
-//	{
-//		switch( cmdBuffer[1] )
-//		{
-//			case 'H': detectAndSetModeChange( EEMODE_HEIGHTONLY ); break;
-//			case 'Y': detectAndSetModeChange( EEMODE_SYNCPULSE ); break;
-//			case 'S': detectAndSetModeChange( EEMODE_SERIAL ); break;
-//		}
-//		cmdBuffer[0] = 0;
-//		cmdBuffer[1] = 0;
-//		cmdBuffer[2] = 0;
-//	}
-//	
-//	// Detect which mode we are in.
-//	switch (eClipMode)
-//	{
-//		// If we are in EEMODE_HEIGHTONLY mode, just use both LDRs for height.
-//		case EEMODE_HEIGHTONLY:
-//			loopHeightMode();
-//			break;
-//			
-//		// If we are in EEMODE_SYNCPULSE mode, use the height and colour.
-//		case EEMODE_SYNCPULSE:
-//			loopSyncPulseMode();
-//			break;
-//			
-//		// If we are in EEMODE_SERIAL, use the simple binary protocol.
-//		case EEMODE_SERIAL:
-//			loopSerialMode();
-//			break;
-//			
-//		// Unknown mode.. should not get here.
-//		default:
-//			break;
-//	}
-//	
-//	// If we are in profiling mode.
-//	#ifdef MODE_PROFILING
-//	
-//	static bool bMeasuring = false;			// Are we measuring.
-//	static unsigned int iMeasureCount = 0;	// How many have we measured.
-//	
-//	// Process new commands.
-//	if (Serial.available())
-//	{
-//		byte data = Serial.read();
-//		switch (data)
-//		{
-//			case 'p':	// PING / PONG
-//				//Serial.println("pong");
-//				break;
-//			case 'i':	// INFORMATION
-//				{
-//					//Serial.print(millis()); //Serial.print(","); 				// ShapeClip time in ms.
-//					//Serial.print(analogRead(PIN_FORCE)); //Serial.print(","); // Force reading.
-//					//Serial.print(iMotorPosition); //Serial.print(","); 		// Current MOTOR HEIGHT.
-//					//Serial.print(iTargetPos); //Serial.print(","); 			// Target MOTOR HEIGHT.
-//					//Serial.print(iTargetR); //Serial.print(","); 				// Target RED
-//					//Serial.print(iTargetG); //Serial.print(","); 				// Target GREEN
-//					//Serial.print(iTargetB); //Serial.print("\n"); 			// Target BLUE.
-//				}
-//				break;
-//			case 's':	// START STREAMING
-//				//Serial.print("start "); 
-//				//Serial.println(iMeasureCount);
-//				bMeasuring = true;
-//				break;
-//			case 'f':	// FINISH STREAMING
-//				//Serial.print("stop ");
-//				//Serial.println(iMeasureCount);
-//				bMeasuring = false;
-//				iMeasureCount ++;
-//				break;
-//			case 'z':	// ZERO MOTOR
-//				zeroMotor();
-//				break;
-//		}
-//	}
-//	
-//	// Print out if measuring.
-//	if (bMeasuring)
-//	{
-//		// Rate limit the output stream.
-//		static unsigned long tmrSample = 0;
-//		if (cycleCheck(&tmrSample, PROFILING_RATE))
-//		{
-//			//Serial.print(iMotorPosition); //Serial.print(","); 	// Current MOTOR HEIGHT.
-//			//Serial.print(iTargetPos); //Serial.print(","); 		// Target MOTOR HEIGHT.
-//			//Serial.print(iTargetR); //Serial.print(","); 			// Target RED
-//			//Serial.print(iTargetG); //Serial.print(","); 			// Target GREEN
-//			//Serial.print(iTargetB); //Serial.print("\n"); 		// Target BLUE.
-//			
-//			//#define HRGB(h,r,g,b) 	(((h & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8)  | ((b & 0xFF) << 0))
-//			////Serial.println(HRGB(iTargetPos, iTargetR, iTargetG, iTargetB), HEX); // Target HRGB.
-//		}
-//	}
-//	#endif
 	
 }
 
